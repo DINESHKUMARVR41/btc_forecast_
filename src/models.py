@@ -1,52 +1,39 @@
 import numpy as np
-from sklearn.metrics import mean_absolute_error
-from sklearn.ensemble import ExtraTreesRegressor
+from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.linear_model import Ridge
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 from statsmodels.tsa.arima.model import ARIMA
 
-class NaiveModel:
-    def fit(self, X, y):
-        self.last = float(y.iloc[-1] if hasattr(y, "iloc") else y[-1])
-        return self
-    def predict(self, X):
-        return np.full(len(X), self.last)
 
 def make_ml_model(random_state=42):
-    return ExtraTreesRegressor(
-        n_estimators=160,
-        max_depth=5,
-        min_samples_leaf=8,
-        max_features=0.8,
+    return HistGradientBoostingRegressor(
+        max_iter=300, learning_rate=0.035, max_leaf_nodes=15,
+        max_depth=6, min_samples_leaf=30, l2_regularization=1.0,
         random_state=random_state,
-        n_jobs=-1,
     )
 
-def fit_calibrated_model(df, feature_columns, calibration_size=90):
-    """Fit the ML model and calibrate return strength on past data only."""
-    size = min(calibration_size, max(30, len(df) // 5))
-    fit_data = df.iloc[:-size]
-    calibration_data = df.iloc[-size:]
 
-    calibration_model = make_ml_model()
-    calibration_model.fit(fit_data[feature_columns], fit_data["target_return"])
-    raw_return = calibration_model.predict(calibration_data[feature_columns])
-    base_price = calibration_data["target_price"].to_numpy() / np.exp(
-        calibration_data["target_return"].to_numpy()
-    )
-    actual_price = calibration_data["target_price"].to_numpy()
-    scales = np.arange(0.0, 1.01, 0.05)
-    scale = min(
-        scales,
-        key=lambda value: mean_absolute_error(
-            actual_price, base_price * np.exp(value * raw_return)
-        ),
-    )
+def make_ridge_model(alpha=8.0):
+    return make_pipeline(StandardScaler(), Ridge(alpha=alpha))
 
-    model = make_ml_model()
+
+def fit_model(df, feature_columns, kind="HistGradientBoosting"):
+    if len(df) < 100:
+        raise ValueError("Not enough rows to fit the forecasting model.")
+    model = make_ridge_model() if kind == "Ridge" else make_ml_model()
     model.fit(df[feature_columns], df["target_return"])
-    return model, float(scale)
+    return model
 
-def arima_forecast(returns, order=(5, 1, 2)):
-    series = np.asarray(returns, dtype=float)
-    model = ARIMA(series, order=order, trend=None)
-    fitted = model.fit()
-    return float(fitted.forecast(steps=1)[0])
+
+def momentum_return(row):
+    values = [float(row.get("return_3", 0)), float(row.get("return_7", 0)), float(row.get("return_14", 0))]
+    return 0.50 * values[0] + 0.30 * values[1] + 0.20 * values[2]
+
+
+def arima_price_forecast(close_prices, order=(5, 1, 2), steps=1):
+    prices = np.asarray(close_prices, dtype=float)
+    if len(prices) < 80:
+        raise ValueError("Not enough observations for ARIMA forecasting.")
+    fitted = ARIMA(np.log(prices), order=order, trend=None).fit()
+    return np.exp(np.asarray(fitted.forecast(steps=steps), dtype=float))

@@ -1,110 +1,79 @@
-# BTC Forecast — Regime-Aware Bitcoin Forecasting
+# Bitcoin Forecast Engine — Round 1
 
-Round 1 submission project for the Glimpse Trading Hackathon 2026.
+A Python time-series forecasting system for the Round 1 Bitcoin forecasting challenge.
 
-## What this project does
+## What is predicted?
 
-This project builds a reproducible Bitcoin time-series forecasting pipeline:
+The system predicts the **next daily BTC-USD closing price after the latest completed daily candle**.
 
-1. Downloads historical BTC-USD OHLCV data.
-2. Creates leakage-safe return, trend, momentum, volatility and lag features.
-3. Predicts the **next-day log return**, then converts it back to a BTC price forecast.
-4. Compares a naive baseline, ARIMA baseline and gradient-boosting model.
-5. Uses walk-forward / expanding-window evaluation instead of random train/test splitting.
-6. Reports MAE, RMSE, MAPE and directional accuracy.
-7. Produces forecast CSVs and plots.
-8. Provides an optional lightweight Streamlit dashboard.
+It does **not** predict the current/live Bitcoin price. The live quote is an observed market value shown separately for context.
 
-The primary model is `HistGradientBoostingRegressor` from scikit-learn so the project remains easy to install and practical on CPU-only laptops. An XGBoost implementation can be added later if resources permit.
+The supervised target is the next-day log return:
 
-## Why this design?
+```text
+target_return(t) = log(close(t+1) / close(t))
+```
 
-The supplied Round 1 statement asks for a working Bitcoin time-series forecasting model, historical-data testing/backtesting, a README and MIT License. The research material suggests ARIMA as a classical baseline, volatility-aware features, and careful time-series validation.
+The deployed ML forecast is converted back to price using the latest completed daily close:
 
-The model does **not** claim to know the future perfectly. Bitcoin is noisy and non-stationary. The goal is to test whether engineered historical signals improve on simple baselines under an honest temporal evaluation.
+```text
+forecast(t+1) = latest_daily_close(t) * exp(predicted_return(t))
+```
 
-## Target
+## Forecast model vs benchmark
 
-For day t:
+The project deliberately separates the **deployed forecast model** from the **benchmark**:
 
-`log_return(t+1) = log(Close(t+1)) - log(Close(t))`
+- **ML Ensemble:** transparent 50/50 average of HistGradientBoosting and Ridge; this is the displayed/deployed forecast.
+- **Naive/Persistence:** assumes the next daily close equals the latest completed daily close; this is the primary benchmark.
+- **Momentum:** simple momentum baseline.
+- **ARIMA(5,1,2):** benchmark aligned with the supplied research direction.
 
-The model predicts the next-day return. The predicted price is reconstructed as:
-
-`predicted_price(t+1) = Close(t) * exp(predicted_return)`
+The ML model is not declared a winner merely because it is the deployed forecast. Walk-forward metrics for every model are shown in the dashboard and saved to `results/metrics.csv`.
 
 ## Features
 
-- OHLCV-derived returns
-- 1/3/7/14/30-day returns
-- SMA and EMA ratios
-- RSI
-- ATR percentage
-- rolling volatility
-- volatility change
-- volume change
-- lagged returns
+Daily returns, SMA/EMA ratios, momentum, RSI, ATR, volatility, volatility change, volume change and lagged returns.
 
-All features are calculated from information available at or before the forecast origin.
+## Validation
 
-## Backtesting
+Backtesting uses chronological walk-forward evaluation: models only train on data available before each test block. No random train/test shuffle is used.
 
-The backtester uses expanding windows:
+Metrics include:
 
-```text
-Train ───── Test
-Train ───────── Test
-Train ───────────── Test
-Train ───────────────── Test
-```
+- Price MAE
+- Price RMSE
+- Price MAPE
+- Next-day return MAE
+- Directional accuracy
+- Directional coverage
 
-There is no random shuffle.
-
-## Quick start — Windows PowerShell
+## Run
 
 ```powershell
-cd btc_forecast_round1
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-python -m src.pipeline --start 2023-01-01 --end 2026-09-19
-```
-
-Results will be written to `results/`.
-
-To launch the optional dashboard:
-
-```powershell
+python -m src.pipeline --start 2023-01-01
 streamlit run app.py
 ```
 
-## Project structure
+The pipeline writes backtest metrics, forecasts, charts and model artifacts to `results/` and `models/`.
 
-```text
-btc_forecast_round1/
-├── app.py
-├── requirements.txt
-├── LICENSE
-├── README.md
-├── data/
-├── models/
-├── results/
-│   └── plots/
-└── src/
-    ├── data.py
-    ├── features.py
-    ├── models.py
-    ├── backtest.py
-    ├── pipeline.py
-    └── predict.py
-```
+## Dashboard
 
-## Submission note
+The frontend clearly separates:
 
-Do not put API keys, credentials or private data into this repository.
+- **Live BTC price:** observed current reference
+- **Latest daily close:** model anchor
+- **Next daily close forecast:** predicted value
+- **Predicted move:** predicted return
+- **Naive benchmark:** persistence reference
+- **Model signals:** HGB, Ridge, ensemble and momentum
+- **Walk-forward backtest:** historical out-of-sample performance
+- **Volatility range:** approximate movement range, not a calibrated confidence interval
 
-The repository should contain the code and reproducible methodology. Generated datasets can be omitted if GitHub size limits are a concern; the pipeline can download them again.
+## Scope
 
-## Important limitation
+This repository is strictly for the Round 1 Bitcoin forecasting task. It does not use Glimpse crowd data, Glimpse APIs, Round 2 features, trading execution or paid data services.
 
-This is a forecasting research project, not a financial-advice or automated-trading system. Backtest performance is historical and does not guarantee future performance.
+## License
+
+MIT

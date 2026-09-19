@@ -1,11 +1,21 @@
 # Round 1 Scope
 
-The uploaded Round 1 statement requires a time-series forecasting model that predicts future Bitcoin price, using historical Bitcoin data, the provided research papers and suitable data-science techniques. The submission must include the working model, README, backtesting results and MIT License.
+This project is intentionally limited to the Round 1 Bitcoin forecasting task.
 
-This implementation deliberately does **not** depend on Glimpse crowd data or a Round 2 API. Round 2 details are not specified in the supplied statement, so they are outside this project's scope.
+## Included
+- Historical Bitcoin OHLCV data
+- Time-series feature engineering
+- Next-day return forecasting
+- Walk-forward backtesting
+- Naive, momentum, Ridge, HistGradientBoosting, ML ensemble and ARIMA benchmarks
+- Streamlit frontend
 
-The core experimental question is:
+## Explicitly excluded
+- Glimpse crowd data/API
+- Round 2 features
+- Trading execution
+- Portfolio management
+- Paid proprietary market-data services
 
-> Do engineered historical market features improve next-day Bitcoin forecasting over a naive baseline under walk-forward evaluation?
-
-The project includes ARIMA as a research-aligned baseline dependency for future/extended experiments, while the main scalable CPU model is scikit-learn HistGradientBoosting.
+## Target
+The model forecasts the next daily BTC-USD closing price after the latest completed daily candle. The live quote is displayed only as an observed current reference.
